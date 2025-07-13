@@ -8,6 +8,11 @@ import io
 import zipfile
 import os
 import tempfile
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 
 # Page configuration
 st.set_page_config(
@@ -152,10 +157,156 @@ def create_invitation_letter(data, header_image=None, footer_image=None, signatu
         
         doc.add_paragraph(f"Sumon kumar Paul\nCoordinator - Administration\n")
         
-        return doc
+def create_pdf_letter(data, header_image=None, footer_image=None, signature_image=None):
+    """Create PDF invitation letter"""
+    try:
+        # Create PDF buffer
+        pdf_buffer = io.BytesIO()
+        
+        # Create document
+        doc = SimpleDocTemplate(
+            pdf_buffer,
+            pagesize=A4,
+            rightMargin=0.8*inch,
+            leftMargin=0.9*inch,
+            topMargin=1*inch,
+            bottomMargin=1*inch
+        )
+        
+        # Get styles
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=12,
+            spaceAfter=12,
+            alignment=TA_LEFT
+        )
+        
+        normal_style = ParagraphStyle(
+            'CustomNormal',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceAfter=6,
+            alignment=TA_LEFT,
+            fontName='Helvetica'
+        )
+        
+        justify_style = ParagraphStyle(
+            'CustomJustify',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceAfter=6,
+            alignment=TA_JUSTIFY,
+            fontName='Helvetica'
+        )
+        
+        # Story (content list)
+        story = []
+        
+        # Add header image
+        if header_image:
+            # Save image to temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+                tmp.write(header_image.read())
+                tmp_path = tmp.name
+            
+            img = Image(tmp_path, width=3.44*inch, height=1*inch)
+            img.hAlign = 'RIGHT'
+            story.append(img)
+            story.append(Spacer(1, 12))
+            
+            # Clean up
+            os.unlink(tmp_path)
+        
+        # Add date
+        current_date = datetime.now().strftime("%B %d, %Y")
+        story.append(Paragraph(f"Date: {current_date}", normal_style))
+        story.append(Spacer(1, 12))
+        
+        # Add To section
+        to_text = f"To<br/>{data.get('Location of the Bangladesh Embassy that you are applying to (fill address)', 'N/A')}"
+        story.append(Paragraph(to_text, normal_style))
+        story.append(Spacer(1, 12))
+        
+        # Subject line
+        subject_text = f"""Subject: Request for business visa to <b>{data.get('Full Name \\n(As it appears on passport)', 'N/A')}</b>, 
+        Passport No: <b>{data.get('Passport number', 'N/A')}</b>, 
+        Nationality: <b>{data.get('Nationality', 'N/A')}</b>."""
+        story.append(Paragraph(subject_text, normal_style))
+        story.append(Spacer(1, 12))
+        
+        # Dear Sir/Madam
+        story.append(Paragraph("Dear Sir/Madam,", normal_style))
+        story.append(Spacer(1, 12))
+        
+        # Organization info
+        org_text = """Save the Children is an international development organization working in 120 countries around the world. 
+        The headquarters of Save the Children is located at St Vincent House, 30 Orange Street, London WC2H 7HH, United Kingdom. 
+        Save the Children is registered with the NGO Affairs Bureau in Bangladesh (registered number 2630, dated March 20, 2011)."""
+        story.append(Paragraph(org_text, justify_style))
+        story.append(Spacer(1, 12))
+        
+        # Main body
+        body_text = f"""<b>{data.get('Full Name \\n(As it appears on passport)', 'N/A')}</b>, 
+        {data.get('Job Title', 'N/A')}, of Save the Children has been invited to the Save the Children International office in Bangladesh 
+        to participate in meetings, training, and program activities from <b>{data.get('Arrival Date in Bangladesh', 'N/A')}</b> 
+        to <b>{data.get('Departure Date', 'N/A')}</b>. 
+        The Save the Children Bangladesh Country Office will ensure all logistical support."""
+        story.append(Paragraph(body_text, justify_style))
+        story.append(Spacer(1, 12))
+        
+        # Assistance paragraph
+        assistance_text = f"""Your kind assistance in granting a visa for {data.get('Full Name \\n(As it appears on passport)', 'N/A')} 
+        to visit Bangladesh would be highly appreciated. Please contact at Cell no: +8801913918618 and mail: 
+        <b>sumon.paul@savethechildren.org</b> if there is any query regarding the processing of this visa."""
+        story.append(Paragraph(assistance_text, justify_style))
+        story.append(Spacer(1, 12))
+        
+        # Thank you
+        story.append(Paragraph("Thank you for your kind assistance.", normal_style))
+        story.append(Spacer(1, 24))
+        
+        # Add signature image
+        if signature_image:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+                tmp.write(signature_image.read())
+                tmp_path = tmp.name
+            
+            sig_img = Image(tmp_path, width=2.5*inch, height=1*inch)
+            sig_img.hAlign = 'LEFT'
+            story.append(sig_img)
+            story.append(Spacer(1, 12))
+            
+            os.unlink(tmp_path)
+        
+        # Signature text
+        signature_text = "Sumon kumar Paul<br/>Coordinator - Administration"
+        story.append(Paragraph(signature_text, normal_style))
+        
+        # Add footer image
+        if footer_image:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+                tmp.write(footer_image.read())
+                tmp_path = tmp.name
+            
+            footer_img = Image(tmp_path, width=6.75*inch, height=0.5*inch)
+            footer_img.hAlign = 'CENTER'
+            story.append(Spacer(1, 24))
+            story.append(footer_img)
+            
+            os.unlink(tmp_path)
+        
+        # Build PDF
+        doc.build(story)
+        pdf_buffer.seek(0)
+        
+        return pdf_buffer.getvalue()
         
     except Exception as e:
-        st.error(f"Error creating invitation letter: {str(e)}")
+        st.error(f"Error creating PDF: {str(e)}")
         return None
 
 # Main interface
@@ -196,6 +347,14 @@ with col1:
 with col2:
     st.markdown("### ⚙️ Generation Options")
     
+    # Format selection
+    output_format = st.selectbox(
+        "Output Format",
+        ["Word (.docx)", "PDF", "Both"],
+        index=2,
+        help="Choose the output format for generated files"
+    )
+    
     # Generate button
     if st.button("🚀 Generate Invitation Letters", type="primary", use_container_width=True):
         if not uploaded_files:
@@ -216,29 +375,53 @@ with col2:
                 # Read data
                 data = read_word_data(uploaded_file)
                 if data:
-                    # Create invitation letter
-                    doc = create_invitation_letter(
-                        data, 
-                        header_image=header_image, 
-                        footer_image=footer_image,
-                        signature_image=signature_image
-                    )
+                    base_name = uploaded_file.name.replace('.docx', '')
                     
-                    if doc:
-                        # Save to memory
-                        doc_buffer = io.BytesIO()
-                        doc.save(doc_buffer)
-                        doc_buffer.seek(0)
+                    # Generate Word file
+                    if output_format in ["Word (.docx)", "Both"]:
+                        doc = create_invitation_letter(
+                            data, 
+                            header_image=header_image, 
+                            footer_image=footer_image,
+                            signature_image=signature_image
+                        )
                         
-                        # Generate filename
-                        base_name = uploaded_file.name.replace('.docx', '')
-                        filename = f"{base_name}_invitation.docx"
+                        if doc:
+                            doc_buffer = io.BytesIO()
+                            doc.save(doc_buffer)
+                            doc_buffer.seek(0)
+                            
+                            generated_files.append({
+                                'filename': f"{base_name}_invitation.docx",
+                                'data': doc_buffer.getvalue(),
+                                'type': 'docx',
+                                'applicant': data.get('Full Name \n(As it appears on passport)', 'Unknown')
+                            })
+                    
+                    # Generate PDF file
+                    if output_format in ["PDF", "Both"]:
+                        # Reset image file pointers
+                        if header_image:
+                            header_image.seek(0)
+                        if footer_image:
+                            footer_image.seek(0)
+                        if signature_image:
+                            signature_image.seek(0)
+                            
+                        pdf_data = create_pdf_letter(
+                            data,
+                            header_image=header_image,
+                            footer_image=footer_image,
+                            signature_image=signature_image
+                        )
                         
-                        generated_files.append({
-                            'filename': filename,
-                            'data': doc_buffer.getvalue(),
-                            'applicant': data.get('Full Name \n(As it appears on passport)', 'Unknown')
-                        })
+                        if pdf_data:
+                            generated_files.append({
+                                'filename': f"{base_name}_invitation.pdf",
+                                'data': pdf_data,
+                                'type': 'pdf',
+                                'applicant': data.get('Full Name \n(As it appears on passport)', 'Unknown')
+                            })
             
             # Store in session state
             st.session_state.generated_files = generated_files
@@ -264,11 +447,14 @@ if st.session_state.generated_files:
         # Individual downloads
         st.markdown("**Individual Downloads:**")
         for file_info in st.session_state.generated_files:
+            mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if file_info['type'] == 'docx' else "application/pdf"
+            file_icon = "📄" if file_info['type'] == 'docx' else "📋"
+            
             st.download_button(
-                label=f"📄 {file_info['applicant']}",
+                label=f"{file_icon} {file_info['applicant']} ({file_info['type'].upper()})",
                 data=file_info['data'],
                 file_name=file_info['filename'],
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                mime=mime_type
             )
     
     with col2:
